@@ -462,16 +462,22 @@
       hideError(transcribeError);
 
       const mimeType = audioBlob.type || 'audio/webm';
-      const ext = mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.mp4' : '.webm';
-
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording' + ext);
 
       btnTranscribe.disabled = true;
       btnTranscribe.innerHTML = `<span class="spinner"></span> Transcribing...`;
 
       try {
-        const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(audioBlob);
+        });
+
+        const res = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio: base64, mimeType }),
+        });
         const data = await res.json();
 
         if (!res.ok) throw new Error(data.error || 'Transcription failed');
