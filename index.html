@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Transcriber</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1a1a2e;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 32px;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 20px;
+    }
+
+    /* Recording controls */
+    .recording-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #b91c1c; }
+
+    .btn-warning { background: #d97706; color: #fff; }
+    .btn-warning:hover:not(:disabled) { background: #b45309; }
+
+    .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+    .btn-secondary:hover:not(:disabled) { background: #e5e7eb; }
+
+    .btn-success { background: #059669; color: #fff; }
+    .btn-success:hover:not(:disabled) { background: #047857; }
+
+    /* Status indicator */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-badge.idle { background: #f3f4f6; color: #6b7280; }
+    .status-badge.recording { background: #fee2e2; color: #dc2626; }
+    .status-badge.paused { background: #fef3c7; color: #d97706; }
+    .status-badge.done { background: #d1fae5; color: #059669; }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .dot.pulse {
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .timer {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: 0.05em;
+      margin: 20px 0 0;
+    }
+
+    /* Transcript */
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      resize: vertical;
+      color: #1a1a2e;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+
+    textarea::placeholder { color: #9ca3af; }
+
+    .textarea-hint {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-top: 8px;
+    }
+
+    /* Structured output */
+    .structured-output {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .field-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6b7280;
+      min-width: 160px;
+      padding-top: 2px;
+    }
+
+    .field-value {
+      font-size: 0.95rem;
+      color: #1a1a2e;
+      flex: 1;
+    }
+
+    .field-value.null-value {
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    .tasks-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tasks-list li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 0.95rem;
+      color: #1a1a2e;
+    }
+
+    .tasks-list li::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2563eb;
+      flex-shrink: 0;
+      margin-top: 7px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      background: #fee2e2;
+      color: #dc2626;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      margin-top: 16px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Voice Transcriber</h1>
+    <p class="subtitle">Record, transcribe, and structure your client conversations.</p>
+
+    <!-- Recording Card -->
+    <div class="card">
+      <div class="card-title">Recording</div>
+
+      <div class="recording-controls">
+        <button id="btn-start" class="btn btn-danger">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+          Start Recording
+        </button>
+        <button id="btn-pause" class="btn btn-warning" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          Pause
+        </button>
+        <button id="btn-stop" class="btn btn-secondary" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          Stop
+        </button>
+
+        <span id="status-badge" class="status-badge idle">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Idle</span>
+        </span>
+      </div>
+
+      <div class="timer hidden" id="timer">0:00</div>
+      <div id="record-error" class="error-msg hidden"></div>
+    </div>
+
+    <!-- Transcribe Card -->
+    <div class="card hidden" id="transcribe-card">
+      <div class="card-title">Transcription</div>
+      <button id="btn-transcribe" class="btn btn-primary">
+        Transcribe Recording
+      </button>
+      <div id="transcribe-error" class="error-msg hidden"></div>
+
+      <div id="transcript-section" class="hidden" style="margin-top: 20px;">
+        <textarea id="transcript-text" placeholder="Transcription will appear here..."></textarea>
+        <p class="textarea-hint">You can edit the text above to correct any transcription errors.</p>
+      </div>
+    </div>
+
+    <!-- Summarize Card -->
+    <div class="card hidden" id="summarize-card">
+      <div class="card-title">Structure & Summary</div>
+      <button id="btn-summarize" class="btn btn-success">
+        Structure &amp; Summarize
+      </button>
+      <div id="summarize-error" class="error-msg hidden"></div>
+
+      <div id="summary-section" class="hidden" style="margin-top: 24px;">
+        <div class="structured-output" id="structured-output"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioBlob = null;
+    let timerInterval = null;
+    let elapsedSeconds = 0;
+    let isPaused = false;
+
+    const btnStart = document.getElementById('btn-start');
+    const btnPause = document.getElementById('btn-pause');
+    const btnStop = document.getElementById('btn-stop');
+    const btnTranscribe = document.getElementById('btn-transcribe');
+    const btnSummarize = document.getElementById('btn-summarize');
+
+    const statusBadge = document.getElementById('status-badge');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const timerEl = document.getElementById('timer');
+
+    const transcribeCard = document.getElementById('transcribe-card');
+    const transcriptSection = document.getElementById('transcript-section');
+    const transcriptText = document.getElementById('transcript-text');
+    const summarizeCard = document.getElementById('summarize-card');
+    const summarySection = document.getElementById('summary-section');
+    const structuredOutput = document.getElementById('structured-output');
+
+    const recordError = document.getElementById('record-error');
+    const transcribeError = document.getElementById('transcribe-error');
+    const summarizeError = document.getElementById('summarize-error');
+
+    function setStatus(state) {
+      statusBadge.className = 'status-badge ' + state;
+      statusDot.className = 'dot' + (state === 'recording' ? ' pulse' : '');
+      const labels = { idle: 'Idle', recording: 'Recording', paused: 'Paused', done: 'Ready' };
+      statusText.textContent = labels[state] || state;
+    }
+
+    function formatTime(s) {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return m + ':' + String(sec).padStart(2, '0');
+    }
+
+    function startTimer() {
+      timerEl.classList.remove('hidden');
+      timerInterval = setInterval(() => {
+        elapsedSeconds++;
+        timerEl.textContent = formatTime(elapsedSeconds);
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      clearInterval(timerInterval);
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      elapsedSeconds = 0;
+      timerEl.textContent = '0:00';
+      timerEl.classList.add('hidden');
+    }
+
+    function showError(el, msg) {
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideError(el) {
+      el.classList.add('hidden');
+    }
+
+    // Start recording
+    btnStart.addEventListener('click', async () => {
+      hideError(recordError);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+          .find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const type = mediaRecorder.mimeType || 'audio/webm';
+          audioBlob = new Blob(audioChunks, { type });
+          stream.getTracks().forEach(t => t.stop());
+        };
+
+        mediaRecorder.start(250);
+        isPaused = false;
+
+        btnStart.disabled = true;
+        btnPause.disabled = false;
+        btnStop.disabled = false;
+        transcribeCard.classList.add('hidden');
+        transcriptSection.classList.add('hidden');
+        summarizeCard.classList.add('hidden');
+        summarySection.classList.add('hidden');
+
+        setStatus('recording');
+        resetTimer();
+        startTimer();
+      } catch (err) {
+        showError(recordError, 'Microphone access denied. Please allow microphone access and try again.');
+      }
+    });
+
+    // Pause / Resume
+    btnPause.addEventListener('click', () => {
+      if (!mediaRecorder) return;
+
+      if (!isPaused) {
+        mediaRecorder.pause();
+        isPaused = true;
+        btnPause.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Resume`;
+        setStatus('paused');
+        pauseTimer();
+      } else {
+        mediaRecorder.resume();
+        isPaused = false;
+        btnPause.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+        setStatus('recording');
+        startTimer();
+      }
+    });
+
+    // Stop recording
+    btnStop.addEventListener('click', () => {
+      if (!mediaRecorder) return;
+      mediaRecorder.stop();
+
+      btnStart.disabled = false;
+      btnPause.disabled = true;
+      btnStop.disabled = true;
+      btnPause.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+      isPaused = false;
+
+      setStatus('done');
+      pauseTimer();
+      transcribeCard.classList.remove('hidden');
+    });
+
+    // Transcribe
+    btnTranscribe.addEventListener('click', async () => {
+      if (!audioBlob) return;
+      hideError(transcribeError);
+
+      const mimeType = audioBlob.type || 'audio/webm';
+      const ext = mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.mp4' : '.webm';
+
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording' + ext);
+
+      btnTranscribe.disabled = true;
+      btnTranscribe.innerHTML = `<span class="spinner"></span> Transcribing...`;
+
+      try {
+        const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Transcription failed');
+
+        transcriptText.value = data.text;
+        transcriptSection.classList.remove('hidden');
+        summarizeCard.classList.remove('hidden');
+      } catch (err) {
+        showError(transcribeError, err.message);
+      } finally {
+        btnTranscribe.disabled = false;
+        btnTranscribe.textContent = 'Transcribe Recording';
+      }
+    });
+
+    // Summarize
+    btnSummarize.addEventListener('click', async () => {
+      const transcript = transcriptText.value.trim();
+      if (!transcript) {
+        showError(summarizeError, 'The transcript is empty. Please transcribe a recording first.');
+        return;
+      }
+      hideError(summarizeError);
+
+      btnSummarize.disabled = true;
+      btnSummarize.innerHTML = `<span class="spinner"></span> Structuring...`;
+
+      try {
+        const res = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Summarization failed');
+
+        renderStructuredOutput(data);
+        summarySection.classList.remove('hidden');
+      } catch (err) {
+        showError(summarizeError, err.message);
+      } finally {
+        btnSummarize.disabled = false;
+        btnSummarize.textContent = 'Structure & Summarize';
+      }
+    });
+
+    function val(v) {
+      if (v === null || v === undefined || v === '') {
+        return `<span class="field-value null-value">Not identified</span>`;
+      }
+      return `<span class="field-value">${escHtml(String(v))}</span>`;
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderStructuredOutput(data) {
+      const tasks = Array.isArray(data.followUpTasks) && data.followUpTasks.length
+        ? `<ul class="tasks-list">${data.followUpTasks.map(t => `<li>${escHtml(t)}</li>`).join('')}</ul>`
+        : `<span class="field-value null-value">None identified</span>`;
+
+      structuredOutput.innerHTML = `
+        <div class="field-row">
+          <span class="field-label">Client Name</span>
+          ${val(data.clientName)}
+        </div>
+        <hr class="divider" />
+        <div class="field-row">
+          <span class="field-label">Contact Person</span>
+          ${val(data.contactPerson)}
+        </div>
+        <hr class="divider" />
+        <div class="field-row">
+          <span class="field-label">Date of Recording</span>
+          ${val(data.dateOfRecording)}
+        </div>
+        <hr class="divider" />
+        <div class="field-row">
+          <span class="field-label">Summary</span>
+          ${val(data.summary)}
+        </div>
+        <hr class="divider" />
+        <div class="field-row">
+          <span class="field-label">Follow-up Tasks</span>
+          <div style="flex:1">${tasks}</div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

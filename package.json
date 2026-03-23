@@ -1,0 +1,9 @@
+{
+  "name": "voice-transcriber",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "formidable": "^3.5.1",
+    "openai": "^4.47.1"
+  }
+}
